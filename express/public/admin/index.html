@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Eventi Real-time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+                max-height: 200px;
+                margin-bottom: 10px;
+                padding: 15px;
+            }
+
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+                max-height: 0;
+                margin-bottom: 0;
+                padding: 0 15px;
+            }
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .event-item.new {
+            animation: slideIn 0.5s ease;
+        }
+
+        .event-item.updated {
+            animation: pulse 1s ease;
+        }
+
+        .event-item.deleted {
+            animation: slideOut 0.3s ease forwards;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-purple-600 p-5">
+    <div class="container mx-auto max-w-6xl">
+        <div class="text-center text-white mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">🚀 Sistema Eventi Real-time</h1>
+            <p class="text-xl opacity-90">Inserisci un codice per visualizzare gli eventi in tempo reale</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl">
+            <div class="text-center">
+                <div class="mb-5">
+                    <label for="codeInput" class="block mb-2 font-semibold text-gray-700">Codice Evento:</label>
+                    <input type="text" id="codeInput" placeholder="Inserisci il tuo codice..."
+                        class="w-full max-w-md mx-auto px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-colors duration-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                </div>
+                <button
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-none px-8 py-3 rounded-lg text-base font-semibold cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                    onclick="connectToCode()">Connetti</button>
+
+                <div class="text-center my-5 p-3 rounded-lg font-semibold" id="connectionStatus">
+                    Non connesso
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl hidden" id="eventsSection">
+            <div class="flex justify-between items-center mb-5 flex-wrap gap-3">
+                <h2 class="text-2xl font-bold text-gray-800">Eventi per: <span id="currentCode"
+                        class="text-blue-600"></span></h2>
+                <div class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold" id="eventsCount">0 eventi</div>
+            </div>
+
+            <div class="bg-gray-50 p-5 rounded-xl mb-5 border-2 border-dashed border-gray-300">
+                <h3 class="text-lg font-semibold mb-4">➕ Aggiungi Nuovo Evento</h3>
+                <div class="flex gap-4 mb-4 flex-wrap">
+                    <div class="flex-1 min-w-48">
+                        <label for="eventTitle" class="block mb-2 font-medium text-gray-700">Titolo:</label>
+                        <input type="text" id="eventTitle" placeholder="Titolo dell'evento..."
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1 min-w-48">
+                        <label for="eventDescription" class="block mb-2 font-medium text-gray-700">Descrizione:</label>
+                        <textarea id="eventDescription" placeholder="Descrizione dell'evento..."
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y min-h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                </div>
+                <button
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-none px-8 py-3 rounded-lg text-base font-semibold cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                    onclick="addEvent()">Aggiungi Evento</button>
+            </div>
+
+            <div id="eventsContainer">
+                <div class="loading text-center p-5 text-gray-600">Caricamento eventi...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket;
+        let currentCode = '';
+        let eventsCount = 0;
+
+        function connectToCode() {
+            const code = document.getElementById('codeInput').value.trim();
+
+            if (!code) {
+                alert('Inserisci un codice valido');
+                return;
+            }
+
+            currentCode = code;
+
+            // Disconnetti socket esistente se presente
+            if (socket) {
+                socket.disconnect();
+            }
+
+            // Crea nuova connessione
+            socket = io();
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                document.getElementById('currentCode').textContent = currentCode;
+                document.getElementById('eventsSection').classList.remove('hidden');
+                document.getElementById('eventsContainer').innerHTML = '<div class="loading text-center p-5 text-gray-600">Caricamento eventi...</div>';
+
+                // Unisciti al codice
+                socket.emit('join-code', currentCode);
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+            });
+
+            socket.on('historical-events', (events) => {
+                displayEvents(events, false);
+            }); socket.on('new-event', (event) => {
+                addEventToList(event, true);
+            });
+
+            socket.on('updated-event', (event) => {
+                updateEventInList(event);
+            });
+
+            socket.on('deleted-event', (event) => {
+                removeEventFromList(event);
+            });
+
+            socket.on('error', (error) => {
+                console.error('Errore WebSocket:', error);
+                alert('Errore di connessione: ' + error);
+            });
+        } function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.textContent = `Connesso al codice: ${currentCode}`;
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-green-100 text-green-800 border border-green-200';
+            } else {
+                statusElement.textContent = 'Connessione persa';
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-red-100 text-red-800 border border-red-200';
+            }
+        }
+
+        function displayEvents(events, isNew = false) {
+            const container = document.getElementById('eventsContainer');
+
+            if (events.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center p-10 text-gray-500">
+                        <div class="text-5xl mb-4">📭</div>
+                        <h3 class="text-lg font-semibold mb-2 text-gray-700">Nessun evento trovato</h3>
+                        <p>Non ci sono ancora eventi per questo codice. Aggiungi il primo evento!</p>
+                    </div>
+                `;
+                eventsCount = 0;
+            } else {
+                container.innerHTML = '';
+                events.forEach(event => addEventToList(event, false));
+                eventsCount = events.length;
+            }
+
+            updateEventsCount();
+        }
+
+        function addEventToList(event, isNew = false) {
+            const container = document.getElementById('eventsContainer');
+
+            // Rimuovi lo stato vuoto se presente
+            const emptyState = container.querySelector('.text-center.p-10');
+            if (emptyState && emptyState.parentElement) {
+                emptyState.parentElement.remove();
+            }
+
+            const eventElement = document.createElement('div');
+            eventElement.className = `event-item bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 transition-all duration-200 flex justify-between items-start gap-4 hover:translate-x-1 hover:shadow-md ${isNew ? 'new bg-green-50 border-green-400' : ''}`;
+            eventElement.setAttribute('data-event-id', event.id);
+
+            const eventTime = new Date(event.created_at).toLocaleString('it-IT');
+
+            eventElement.innerHTML = `
+                <div class="flex-1">
+                    <div class="text-lg font-semibold text-gray-800 mb-1">${escapeHtml(event.title)}</div>
+                    <div class="text-gray-600 mb-2 leading-relaxed">${escapeHtml(event.description)}</div>
+                    <div class="text-sm text-gray-500 italic">📅 ${eventTime}</div>
+                </div>
+                <div class="flex gap-1 flex-shrink-0">
+                    <button class="bg-red-500 text-white border-none px-3 py-2 rounded-md cursor-pointer text-sm transition-all duration-200 hover:bg-red-600 hover:scale-105 active:scale-95" onclick="deleteEvent(${event.id})" title="Elimina evento">🗑️</button>
+                </div>
+            `;
+
+            if (isNew) {
+                container.insertBefore(eventElement, container.firstChild);
+                eventsCount++;
+
+                // Rimuovi la classe 'new' dopo l'animazione
+                setTimeout(() => {
+                    eventElement.classList.remove('new', 'bg-green-50', 'border-green-400');
+                }, 500);
+            } else {
+                container.appendChild(eventElement);
+            }
+
+            updateEventsCount();
+        }
+
+        function updateEventInList(event) {
+            const eventElement = document.querySelector(`[data-event-id="${event.id}"]`);
+            if (eventElement) {
+                const eventTime = new Date(event.created_at).toLocaleString('it-IT');
+
+                eventElement.innerHTML = `
+                    <div class="flex-1">
+                        <div class="text-lg font-semibold text-gray-800 mb-1">${escapeHtml(event.title)}</div>
+                        <div class="text-gray-600 mb-2 leading-relaxed">${escapeHtml(event.description)}</div>
+                        <div class="text-sm text-gray-500 italic">📅 ${eventTime}</div>
+                    </div>
+                    <div class="flex gap-1 flex-shrink-0">
+                        <button class="bg-red-500 text-white border-none px-3 py-2 rounded-md cursor-pointer text-sm transition-all duration-200 hover:bg-red-600 hover:scale-105 active:scale-95" onclick="deleteEvent(${event.id})" title="Elimina evento">🗑️</button>
+                    </div>
+                `;
+
+                eventElement.classList.add('updated', 'bg-yellow-50', 'border-yellow-400');
+                setTimeout(() => {
+                    eventElement.classList.remove('updated', 'bg-yellow-50', 'border-yellow-400');
+                }, 1000);
+            }
+        }
+
+        function removeEventFromList(event) {
+            const eventElement = document.querySelector(`[data-event-id="${event.id}"]`);
+            if (eventElement) {
+                eventElement.classList.add('deleted');
+                setTimeout(() => {
+                    eventElement.remove();
+                    eventsCount--;
+                    updateEventsCount();
+
+                    // Se non ci sono più eventi, mostra lo stato vuoto
+                    const container = document.getElementById('eventsContainer');
+                    if (container.children.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center p-10 text-gray-500">
+                                <div class="text-5xl mb-4">📭</div>
+                                <h3 class="text-lg font-semibold mb-2 text-gray-700">Nessun evento trovato</h3>
+                                <p>Non ci sono ancora eventi per questo codice. Aggiungi il primo evento!</p>
+                            </div>
+                        `;
+                    }
+                }, 300);
+            }
+        }
+
+        function updateEventsCount() {
+            document.getElementById('eventsCount').textContent = `${eventsCount} eventi`;
+        }
+
+        async function addEvent() {
+            const title = document.getElementById('eventTitle').value.trim();
+            const description = document.getElementById('eventDescription').value.trim();
+
+            if (!title || !description) {
+                alert('Inserisci sia il titolo che la descrizione');
+                return;
+            }
+
+            if (!currentCode) {
+                alert('Connettiti prima a un codice');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/events', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        code: currentCode,
+                        title: title,
+                        description: description
+                    })
+                });
+
+                if (response.ok) {
+                    // Pulisci i campi
+                    document.getElementById('eventTitle').value = '';
+                    document.getElementById('eventDescription').value = '';
+                } else {
+                    const error = await response.json();
+                    alert('Errore nell\'aggiunta dell\'evento: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Errore nella richiesta:', error);
+                alert('Errore di rete nell\'aggiunta dell\'evento');
+            }
+        }
+
+        async function deleteEvent(eventId) {
+            if (!confirm('Sei sicuro di voler eliminare questo evento?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/events/${eventId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    console.log('Evento eliminato con successo');
+                } else {
+                    const error = await response.json();
+                    alert('Errore nell\'eliminazione dell\'evento: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Errore nella richiesta di eliminazione:', error);
+                alert('Errore di rete nell\'eliminazione dell\'evento');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Gestione invio con Enter
+        document.getElementById('codeInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                connectToCode();
+            }
+        });
+
+        document.getElementById('eventTitle').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                document.getElementById('eventDescription').focus();
+            }
+        });
+
+        document.getElementById('eventDescription').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                addEvent();
+            }
+        });
+    </script>
+</body>
+
+</html>

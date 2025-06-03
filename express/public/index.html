@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Eventi Real-time</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideIn {
+            from {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.02);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+                max-height: 200px;
+                margin-bottom: 15px;
+                padding: 20px;
+            }
+
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+                max-height: 0;
+                margin-bottom: 0;
+                padding: 0 20px;
+            }
+        }
+
+        .event-item.new {
+            animation: slideIn 0.5s ease;
+        }
+
+        .event-item.updated {
+            animation: pulse 1s ease;
+        }
+
+        .event-item.deleted {
+            animation: slideOut 0.3s ease forwards;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-purple-600 p-5">
+    <div class="container mx-auto max-w-4xl">
+        <div class="text-center text-white mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">📺 Monitor Eventi Real-time</h1>
+            <p class="text-xl opacity-90">Visualizza gli eventi in tempo reale (Solo lettura)</p>
+        </div>
+
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl">
+            <div class="text-center">
+                <div class="mb-5">
+                    <label for="codeInput" class="block mb-2 font-semibold text-gray-700">Codice Evento:</label>
+                    <input type="text" id="codeInput" placeholder="Inserisci il codice da monitorare..."
+                        class="w-full max-w-md mx-auto px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-colors duration-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                </div>
+                <button
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-none px-8 py-3 rounded-lg text-base font-semibold cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                    onclick="connectToCode()">Connetti e Monitora</button>
+
+                <div class="text-center my-5 p-3 rounded-lg font-semibold" id="connectionStatus">
+                    Non connesso
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl hidden" id="eventsSection">
+            <div
+                class="flex justify-between items-center mb-5 flex-wrap gap-3 md:flex-row flex-col text-center md:text-left">
+                <h2 class="text-2xl font-bold text-gray-800">Eventi per: <span id="currentCode"
+                        class="text-blue-600"></span></h2>
+                <div class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold" id="eventsCount">0 eventi</div>
+            </div>
+
+            <div class="bg-blue-50 text-blue-900 p-4 rounded-xl mb-5 border-l-4 border-blue-400 italic">
+                ℹ️ <strong>Modalità Solo Lettura:</strong> Questa interfaccia permette solo di visualizzare gli eventi
+                in tempo reale. Non è possibile aggiungere o eliminare eventi.
+            </div>
+
+            <div id="eventsContainer" class="max-h-96 overflow-y-auto">
+                <div class="text-center p-10 text-gray-600 text-lg">Caricamento eventi...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket;
+        let currentCode = '';
+        let eventsCount = 0;
+
+        function connectToCode() {
+            const code = document.getElementById('codeInput').value.trim();
+
+            if (!code) {
+                alert('Inserisci un codice valido');
+                return;
+            }
+
+            currentCode = code;
+
+            // Disconnetti socket esistente se presente
+            if (socket) {
+                socket.disconnect();
+            }
+
+            // Crea nuova connessione
+            socket = io();
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                document.getElementById('currentCode').textContent = currentCode;
+                document.getElementById('eventsSection').classList.remove('hidden');
+                document.getElementById('eventsContainer').innerHTML = '<div class="text-center p-10 text-gray-600 text-lg">Caricamento eventi...</div>';
+
+                // Unisciti al codice
+                socket.emit('join-code', currentCode);
+            });
+
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+            });
+
+            socket.on('historical-events', (events) => {
+                displayEvents(events, false);
+            });
+
+            socket.on('new-event', (event) => {
+                addEventToList(event, true);
+            });
+
+            socket.on('updated-event', (event) => {
+                updateEventInList(event);
+            });
+
+            socket.on('deleted-event', (event) => {
+                removeEventFromList(event);
+            });
+
+            socket.on('error', (error) => {
+                console.error('Errore WebSocket:', error);
+                alert('Errore di connessione: ' + error);
+            });
+        } function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connectionStatus');
+            if (connected) {
+                statusElement.textContent = `🟢 Connesso e in ascolto su: ${currentCode}`;
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-green-100 text-green-800 border border-green-200';
+            } else {
+                statusElement.textContent = '🔴 Connessione persa';
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-red-100 text-red-800 border border-red-200';
+            }
+        }
+
+        function displayEvents(events, isNew = false) {
+            const container = document.getElementById('eventsContainer');
+
+            if (events.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center p-15 text-gray-500">
+                        <div class="text-5xl mb-5">📭</div>
+                        <h3 class="text-lg font-semibold mb-3 text-gray-700">Nessun evento trovato</h3>
+                        <p>Non ci sono ancora eventi per questo codice. In attesa di nuovi eventi...</p>
+                    </div>
+                `;
+                eventsCount = 0;
+            } else {
+                container.innerHTML = '';
+                events.forEach(event => addEventToList(event, false));
+                eventsCount = events.length;
+            }
+
+            updateEventsCount();
+        }
+
+        function addEventToList(event, isNew = false) {
+            const container = document.getElementById('eventsContainer');
+
+            // Rimuovi lo stato vuoto se presente
+            const emptyState = container.querySelector('.text-center.p-15');
+            if (emptyState && emptyState.parentElement) {
+                emptyState.parentElement.remove();
+            }
+
+            const eventElement = document.createElement('div');
+            eventElement.className = `event-item bg-gray-50 border border-gray-200 rounded-lg p-5 mb-4 transition-all duration-200 hover:translate-x-1 hover:shadow-md ${isNew ? 'new bg-green-50 border-green-400' : ''}`;
+            eventElement.setAttribute('data-event-id', event.id);
+
+            const eventTime = new Date(event.created_at).toLocaleString('it-IT');
+
+            eventElement.innerHTML = `
+                <div class="text-xl font-bold text-gray-800 mb-2">${escapeHtml(event.title)}</div>
+                <div class="text-gray-600 leading-6 mb-3">${escapeHtml(event.description)}</div>
+                <div class="text-gray-500 text-sm italic">📅 ${eventTime}</div>
+            `;
+
+            if (isNew) {
+                container.insertBefore(eventElement, container.firstChild);
+                eventsCount++;
+
+                // Rimuovi la classe 'new' dopo l'animazione
+                setTimeout(() => {
+                    eventElement.classList.remove('new', 'bg-green-50', 'border-green-400');
+                }, 500);
+            } else {
+                container.appendChild(eventElement);
+            }
+
+            updateEventsCount();
+        }
+
+        function updateEventInList(event) {
+            const eventElement = document.querySelector(`[data-event-id="${event.id}"]`);
+            if (eventElement) {
+                const eventTime = new Date(event.created_at).toLocaleString('it-IT');
+
+                eventElement.innerHTML = `
+                    <div class="text-xl font-bold text-gray-800 mb-2">${escapeHtml(event.title)}</div>
+                    <div class="text-gray-600 leading-6 mb-3">${escapeHtml(event.description)}</div>
+                    <div class="text-gray-500 text-sm italic">📅 ${eventTime}</div>
+                `;
+
+                eventElement.classList.add('updated', 'bg-yellow-50', 'border-yellow-400');
+                setTimeout(() => {
+                    eventElement.classList.remove('updated', 'bg-yellow-50', 'border-yellow-400');
+                }, 1000);
+            }
+        }
+
+        function removeEventFromList(event) {
+            const eventElement = document.querySelector(`[data-event-id="${event.id}"]`);
+            if (eventElement) {
+                eventElement.classList.add('deleted');
+                setTimeout(() => {
+                    eventElement.remove();
+                    eventsCount--;
+                    updateEventsCount();
+
+                    // Se non ci sono più eventi, mostra lo stato vuoto
+                    const container = document.getElementById('eventsContainer');
+                    if (container.children.length === 0) {
+                        container.innerHTML = `
+                            <div class="text-center p-15 text-gray-500">
+                                <div class="text-5xl mb-5">📭</div>
+                                <h3 class="text-lg font-semibold mb-3 text-gray-700">Nessun evento trovato</h3>
+                                <p>Non ci sono ancora eventi per questo codice. In attesa di nuovi eventi...</p>
+                            </div>
+                        `;
+                    }
+                }, 300);
+            }
+        }
+
+        function updateEventsCount() {
+            document.getElementById('eventsCount').textContent = `${eventsCount} eventi`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Gestione invio con Enter
+        document.getElementById('codeInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                connectToCode();
+            }
+        });
+
+        // Auto-refresh della connessione ogni 30 secondi per mantenere attiva la connessione
+        setInterval(() => {
+            if (socket && socket.connected) {
+                socket.emit('ping');
+            }
+        }, 30000);
+    </script>
+</body>
+
+</html>
