@@ -157,7 +157,9 @@
                 console.error('Errore WebSocket:', error);
                 alert('Errore di connessione: ' + error);
             });
-        } function updateConnectionStatus(connected) {
+        } 
+        
+        function updateConnectionStatus(connected) {
             const statusElement = document.getElementById('connectionStatus');
             if (connected) {
                 statusElement.textContent = `🟢 Connesso e in ascolto su: ${currentCode}`;

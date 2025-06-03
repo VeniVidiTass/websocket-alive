@@ -48,9 +48,10 @@ interface NotificationPayload {
 const connectedClients = new Set<string>();
 
 // Mappa per raggruppare client per codice
-//TODO aggiungere doppia indirezione per evitare duplicati
 const clientsByCode = new Map<string, Set<string>>();
 
+// Mappa per tracciare quale codice sta monitorando ogni client (indirezione inversa)
+const codeByClient = new Map<string, string>();
 // Endpoint per servire la pagina principale
 app.get('/', (req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
@@ -81,7 +82,7 @@ app.get('/api/events/:code', async (req: Request, res: Response) => {
 app.post('/api/events', async (req: Request, res: Response) => {
   try {
     const { code, title, description } = req.body;
-    
+
     if (!code || !title || !description) {
       return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
     }
@@ -109,7 +110,6 @@ app.post('/api/events', async (req: Request, res: Response) => {
 app.delete('/api/events/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
     if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({ error: 'ID evento non valido' });
     }
@@ -142,15 +142,29 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
 io.on('connection', (socket) => {
   console.log('Nuovo client connesso:', socket.id);
   connectedClients.add(socket.id);
-
   socket.on('join-code', async (code: string) => {
     try {
       console.log(`Client ${socket.id} si è unito al codice: ${code}`);
-      
+      // Se il client era già associato a un altro codice, rimuovilo prima
+      const previousCode = codeByClient.get(socket.id);
+      if (previousCode && previousCode !== code) {
+        console.log(`Client ${socket.id} stava monitorando il codice ${previousCode}, lo rimuovo`);
+        socket.leave(previousCode);
+
+        const previousClients = clientsByCode.get(previousCode);
+        if (previousClients) {
+          previousClients.delete(socket.id);
+          if (previousClients.size === 0) {
+            clientsByCode.delete(previousCode);
+            console.log(`Codice ${previousCode} rimosso dalla mappa (nessun client connesso)`);
+          }
+        }
+      }
       // Aggiungi il socket al gruppo del codice
       socket.join(code);
-      
-      // Traccia i client per codice
+      // Traccia il codice per questo client (indirezione inversa)
+      codeByClient.set(socket.id, code);
+      // Traccia i client per codice (evita duplicati grazie alla Set)
       if (!clientsByCode.has(code)) {
         clientsByCode.set(code, new Set());
       }
@@ -163,7 +177,7 @@ io.on('connection', (socket) => {
         'SELECT * FROM events WHERE code = $1 ORDER BY created_at ASC',
         [code]
       );
-      
+
       socket.emit('historical-events', result.rows);
       console.log(`Inviati ${result.rows.length} eventi storici al client ${socket.id}`);
 
@@ -172,22 +186,25 @@ io.on('connection', (socket) => {
       socket.emit('error', 'Errore nel recupero degli eventi');
     }
   });
-
   socket.on('disconnect', () => {
     console.log('Client disconnesso:', socket.id);
     connectedClients.delete(socket.id);
-    
-    // Rimuovi il socket da tutti i codici
-    for (const [code, clients] of clientsByCode.entries()) {
-      if (clients.has(socket.id)) {
+    // Utilizza la mappa inversa per trovare direttamente il codice del client
+    const code = codeByClient.get(socket.id);
+    if (code) {
+      // Rimuovi il client dal codice
+      const clients = clientsByCode.get(code);
+      if (clients) {
         clients.delete(socket.id);
         console.log(`Rimosso client ${socket.id} dal codice ${code}. Connessioni rimanenti: ${clients.size}`);
-        
         // Se non ci sono più connessioni per questo codice, pulisci
         if (clients.size === 0) {
           clientsByCode.delete(code);
+          console.log(`Codice ${code} rimosso dalla mappa (nessun client connesso)`);
         }
       }
+      // Rimuovi il client dalla mappa inversa
+      codeByClient.delete(socket.id);
     }
   });
 });
@@ -209,20 +226,18 @@ async function setupDatabaseListener() {
 
   try {
     await notificationClient.connect();
-    
     // Ascolta il canale globale per tutti i cambiamenti dei dati
     await notificationClient.query('LISTEN data_changes');
-      notificationClient.on('notification', (msg) => {
+    notificationClient.on('notification', (msg) => {
       if (msg.channel === 'data_changes' && msg.payload) {
         try {
           const payload: NotificationPayload = JSON.parse(msg.payload);
           console.log('Notifica PostgreSQL ricevuta:', payload);
-          
+
           // Invia l'evento a tutti i client connessi al codice specifico
           if (payload.table === 'events') {
             const event = payload.data;
             const code = payload.code;
-            
             // Gestisce INSERT, UPDATE e DELETE
             switch (payload.action) {
               case 'INSERT':
@@ -282,7 +297,6 @@ server.listen(PORT, async () => {
 // Gestione graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Chiusura del server...');
-  
   await closeDatabaseListener();
   await pool.end();
   process.exit(0);
@@ -290,7 +304,6 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   console.log('Chiusura del server...');
-  
   await closeDatabaseListener();
   await pool.end();
   process.exit(0);

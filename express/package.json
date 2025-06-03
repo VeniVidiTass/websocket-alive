@@ -1,12 +1,12 @@
 {
-  "name": "websockets",
+  "name": "websockets-alive",
   "version": "1.0.0",
   "description": "Sistema eventi real-time con Express, WebSocket e PostgreSQL",
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "tsc",
+    "build": "npm install && tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -21,7 +21,7 @@
   "dependencies": {
     "@types/express": "^4.17.21",
     "dotenv": "^16.5.0",
-    "express": "^4.19.2",
+    "express": "^5.1.0",
     "pg": "^8.16.0",
     "socket.io": "^4.8.1"
   },
