@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor Eventi Real-time</title>
+    <title>A-LIVE</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slideIn {
@@ -63,22 +63,21 @@
     </style>
 </head>
 
-<body class="min-h-screen bg-gradient-to-br from-blue-500 via-purple-500 to-purple-600 p-5">
+<body class="min-h-screen bg-gradient-to-br from-yellow-100 via-amber-100 to-orange-200 p-5">
     <div class="container mx-auto max-w-4xl">
-        <div class="text-center text-white mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">📺 Monitor Eventi Real-time</h1>
-            <p class="text-xl opacity-90">Visualizza gli eventi in tempo reale (Solo lettura)</p>
+        <div class="text-center text-amber-800 mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 drop-shadow-lg">A-LIVE</h1>
+            <p class="text-xl opacity-90">Visualizza gli eventi in tempo reale</p>
         </div>
-
-        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl">
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-xl border border-amber-200">
             <div class="text-center">
                 <div class="mb-5">
-                    <label for="codeInput" class="block mb-2 font-semibold text-gray-700">Codice Evento:</label>
+                    <label for="codeInput" class="block mb-2 font-semibold text-amber-800">Codice Paziente:</label>
                     <input type="text" id="codeInput" placeholder="Inserisci il codice da monitorare..."
-                        class="w-full max-w-md mx-auto px-4 py-3 border-2 border-gray-200 rounded-lg text-base transition-colors duration-300 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
+                        class="w-full max-w-md mx-auto px-4 py-3 border-2 border-amber-200 rounded-lg text-base transition-colors duration-300 focus:outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100" />
                 </div>
                 <button
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 text-white border-none px-8 py-3 rounded-lg text-base font-semibold cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
+                    class="bg-gradient-to-r from-amber-600 to-orange-500 text-white border-none px-8 py-3 rounded-lg text-base font-semibold cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:from-amber-700 hover:to-orange-600 disabled:opacity-60 disabled:cursor-not-allowed disabled:transform-none"
                     onclick="connectToCode()">Connetti e Monitora</button>
 
                 <div class="text-center my-5 p-3 rounded-lg font-semibold" id="connectionStatus">
@@ -86,18 +85,13 @@
                 </div>
             </div>
         </div>
-
-        <div class="bg-white rounded-2xl p-8 mb-5 shadow-2xl hidden" id="eventsSection">
+        <div class="bg-white rounded-2xl p-8 mb-5 shadow-xl border border-amber-200 hidden" id="eventsSection">
             <div
                 class="flex justify-between items-center mb-5 flex-wrap gap-3 md:flex-row flex-col text-center md:text-left">
-                <h2 class="text-2xl font-bold text-gray-800">Eventi per: <span id="currentCode"
-                        class="text-blue-600"></span></h2>
-                <div class="bg-blue-500 text-white px-4 py-2 rounded-full font-semibold" id="eventsCount">0 eventi</div>
-            </div>
-
-            <div class="bg-blue-50 text-blue-900 p-4 rounded-xl mb-5 border-l-4 border-blue-400 italic">
-                ℹ️ <strong>Modalità Solo Lettura:</strong> Questa interfaccia permette solo di visualizzare gli eventi
-                in tempo reale. Non è possibile aggiungere o eliminare eventi.
+                <h2 class="text-2xl font-bold text-amber-800">Eventi per: <span id="currentCode"
+                        class="text-orange-600"></span></h2>
+                <div class="bg-amber-600 text-white px-4 py-2 rounded-full font-semibold" id="eventsCount">0 eventi
+                </div>
             </div>
 
             <div id="eventsContainer" class="max-h-96 overflow-y-auto">
@@ -167,22 +161,20 @@
             const statusElement = document.getElementById('connectionStatus');
             if (connected) {
                 statusElement.textContent = `🟢 Connesso e in ascolto su: ${currentCode}`;
-                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-green-100 text-green-800 border border-green-200';
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-amber-100 text-amber-800 border border-amber-300';
             } else {
                 statusElement.textContent = '🔴 Connessione persa';
-                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-red-100 text-red-800 border border-red-200';
+                statusElement.className = 'text-center my-5 p-3 rounded-lg font-semibold bg-orange-100 text-orange-800 border border-orange-300';
             }
         }
 
         function displayEvents(events, isNew = false) {
-            const container = document.getElementById('eventsContainer');
-
-            if (events.length === 0) {
+            const container = document.getElementById('eventsContainer'); if (events.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center p-15 text-gray-500">
+                    <div class="text-center p-15 text-amber-600">
                         <div class="text-5xl mb-5">📭</div>
-                        <h3 class="text-lg font-semibold mb-3 text-gray-700">Nessun evento trovato</h3>
-                        <p>Non ci sono ancora eventi per questo codice. In attesa di nuovi eventi...</p>
+                        <h3 class="text-lg font-semibold mb-3 text-amber-800">Nessun evento trovato</h3>
+                        <p>Non ci sono ancora eventi per questo paziente. In attesa di nuovi eventi...</p>
                     </div>
                 `;
                 eventsCount = 0;
@@ -202,10 +194,8 @@
             const emptyState = container.querySelector('.text-center.p-15');
             if (emptyState && emptyState.parentElement) {
                 emptyState.parentElement.remove();
-            }
-
-            const eventElement = document.createElement('div');
-            eventElement.className = `event-item bg-gray-50 border border-gray-200 rounded-lg p-5 mb-4 transition-all duration-200 hover:translate-x-1 hover:shadow-md ${isNew ? 'new bg-green-50 border-green-400' : ''}`;
+            }            const eventElement = document.createElement('div');
+            eventElement.className = `event-item bg-amber-50 border border-amber-200 rounded-lg p-5 mb-4 ${isNew ? 'new bg-orange-100 border-orange-400' : ''}`;
             eventElement.setAttribute('data-event-id', event.id);
 
             const eventTime = new Date(event.created_at).toLocaleString('it-IT');
@@ -265,7 +255,7 @@
                             <div class="text-center p-15 text-gray-500">
                                 <div class="text-5xl mb-5">📭</div>
                                 <h3 class="text-lg font-semibold mb-3 text-gray-700">Nessun evento trovato</h3>
-                                <p>Non ci sono ancora eventi per questo codice. In attesa di nuovi eventi...</p>
+                                <p>Non ci sono ancora eventi per questo paziente. In attesa di nuovi eventi...</p>
                             </div>
                         `;
                     }
