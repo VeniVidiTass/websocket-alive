@@ -1,7 +1,7 @@
 services:
   # Database PostgreSQL
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: events_postgres
     environment:
       POSTGRES_DB: events_db
