@@ -3,9 +3,6 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { Pool, Client } from 'pg';
 import path from 'path';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const app = express();
 const server = createServer(app);
@@ -23,8 +20,7 @@ const pool = new Pool({
 // Client dedicato per LISTEN
 let notificationClient: Client | null = null;
 
-// Middleware
-app.use(express.static(path.join(__dirname, '../public')));
+// Middleware per il parsing del JSON
 app.use(express.json());
 
 // Interfaccia per gli eventi
@@ -57,10 +53,27 @@ app.get('/', (req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// Endpoint per servire la pagina principale
-// TODO da autenticare
-app.get('/admin/', (req: Request, res: Response) => {
-  res.sendFile(path.join(__dirname, '../public/admin/index.html'));
+// Endpoint di health check
+app.get('/health', async (req: Request, res: Response) => {
+  try {
+    // Verifica connessione al database
+    await pool.query('SELECT 1');
+
+    res.status(200).json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      database: 'connected',
+      connectedClients: connectedClients.size
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Endpoint per ottenere gli eventi storici
@@ -78,65 +91,78 @@ app.get('/api/alive/:code', async (req: Request, res: Response) => {
   }
 });
 
-// Endpoint per creare un nuovo evento
-app.post('/api/alive', async (req: Request, res: Response) => {
-  try {
-    const { code, title, description } = req.body;
+// Configurazione modalità applicazione
+const MODE = process.env.MODE || 'production';
+const isDebugMode = MODE === 'debug' || MODE === 'development';
 
-    if (!code || !title || !description) {
-      return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
+console.log(`Modalità applicazione: ${MODE}`);
+
+if (isDebugMode) {
+  // Endpoint per servire la pagina admin (solo in modalità debug)
+  app.get('/admin/', (req: Request, res: Response) => {
+    res.sendFile(path.join(__dirname, '../public/admin/index.html'));
+  });
+
+  // Endpoint per creare un nuovo evento
+  app.post('/api/alive', async (req: Request, res: Response) => {
+    try {
+      const { code, title, description } = req.body;
+
+      if (!code || !title || !description) {
+        return res.status(400).json({ error: 'Tutti i campi sono obbligatori' });
+      }
+
+      // Inserisci l'evento nel database - il trigger PostgreSQL invierà la notifica
+      const result = await pool.query(
+        'INSERT INTO alive_logs (code, title, description) VALUES ($1, $2, $3) RETURNING *',
+        [code, title, description]
+      );
+
+      const newEvent = result.rows[0];
+      console.log('Nuovo evento creato:', newEvent);
+
+      // Il trigger PostgreSQL gestirà automaticamente la notifica LISTEN/NOTIFY
+      // Non inviamo direttamente tramite Socket.IO qui
+
+      res.status(201).json(newEvent);
+    } catch (error) {
+      console.error('Errore nella creazione dell\'evento:', error);
+      res.status(500).json({ error: 'Errore interno del server' });
     }
+  });
 
-    // Inserisci l'evento nel database - il trigger PostgreSQL invierà la notifica
-    const result = await pool.query(
-      'INSERT INTO alive_logs (code, title, description) VALUES ($1, $2, $3) RETURNING *',
-      [code, title, description]
-    );
+  // Endpoint per eliminare un evento
+  app.delete('/api/alive/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({ error: 'ID evento non valido' });
+      }
 
-    const newEvent = result.rows[0];
-    console.log('Nuovo evento creato:', newEvent);
+      // Prima recupera l'evento per avere i dettagli
+      const eventResult = await pool.query(
+        'SELECT * FROM alive_logs WHERE id = $1',
+        [id]
+      );
 
-    // Il trigger PostgreSQL gestirà automaticamente la notifica LISTEN/NOTIFY
-    // Non inviamo direttamente tramite Socket.IO qui
+      if (eventResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Evento non trovato' });
+      }
 
-    res.status(201).json(newEvent);
-  } catch (error) {
-    console.error('Errore nella creazione dell\'evento:', error);
-    res.status(500).json({ error: 'Errore interno del server' });
-  }
-});
+      // Elimina l'evento - il trigger PostgreSQL invierà la notifica
+      await pool.query('DELETE FROM alive_logs WHERE id = $1', [id]);
 
-// Endpoint per eliminare un evento
-app.delete('/api/alive/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    if (!id || isNaN(parseInt(id))) {
-      return res.status(400).json({ error: 'ID evento non valido' });
+      console.log('Evento eliminato:', eventResult.rows[0]);
+
+      // Il trigger PostgreSQL gestirà automaticamente la notifica LISTEN/NOTIFY
+
+      res.status(200).json({ message: 'Evento eliminato con successo', deletedEvent: eventResult.rows[0] });
+    } catch (error) {
+      console.error('Errore nell\'eliminazione dell\'evento:', error);
+      res.status(500).json({ error: 'Errore interno del server' });
     }
-
-    // Prima recupera l'evento per avere i dettagli
-    const eventResult = await pool.query(
-      'SELECT * FROM alive_logs WHERE id = $1',
-      [id]
-    );
-
-    if (eventResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Evento non trovato' });
-    }
-
-    // Elimina l'evento - il trigger PostgreSQL invierà la notifica
-    await pool.query('DELETE FROM alive_logs WHERE id = $1', [id]);
-
-    console.log('Evento eliminato:', eventResult.rows[0]);
-
-    // Il trigger PostgreSQL gestirà automaticamente la notifica LISTEN/NOTIFY
-
-    res.status(200).json({ message: 'Evento eliminato con successo', deletedEvent: eventResult.rows[0] });
-  } catch (error) {
-    console.error('Errore nell\'eliminazione dell\'evento:', error);
-    res.status(500).json({ error: 'Errore interno del server' });
-  }
-});
+  });
+}
 
 // Gestione delle connessioni WebSocket
 io.on('connection', (socket) => {

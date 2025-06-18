@@ -16,7 +16,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
-      retries: 5  # Applicazione Node.js
+      retries: 5
+  # Applicazione Node.js
   app:
     build:
       context: ./express
@@ -24,21 +25,24 @@ services:
     container_name: alive_logs_app
     environment:
       - NODE_ENV=production
+      - MODE=server
+      - PORT=3000
       - DB_HOST=alive_logs_postgres
       - DB_PORT=5432
       - DB_NAME=alive_logs_db
       - DB_USER=postgres
       - DB_PASSWORD=password
-      - PORT=3000
     ports:
       - "3001:3000"
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      # Mappa solo la directory express nel container
-      - ./express:/app
-      - /app/node_modules
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # pgAdmin per gestione database
   pgadmin:

@@ -1,6 +1,9 @@
 # Usa l'immagine Node.js ufficiale
 FROM node:24-alpine
 
+# Installa curl per health check
+RUN apk add --no-cache curl
+
 # Crea la directory dell'app
 WORKDIR /app
 
