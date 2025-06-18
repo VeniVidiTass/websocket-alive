@@ -2,9 +2,9 @@ services:
   # Database PostgreSQL
   postgres:
     image: postgres:15-alpine
-    container_name: events_postgres
+    container_name: alive_logs_postgres
     environment:
-      POSTGRES_DB: events_db
+      POSTGRES_DB: alive_logs_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     #ports:
@@ -21,12 +21,12 @@ services:
     build:
       context: ./express
       dockerfile: Dockerfile
-    container_name: events_app
+    container_name: alive_logs_app
     environment:
       - NODE_ENV=production
-      - DB_HOST=postgres
+      - DB_HOST=alive_logs_postgres
       - DB_PORT=5432
-      - DB_NAME=events_db
+      - DB_NAME=alive_logs_db
       - DB_USER=postgres
       - DB_PASSWORD=password
       - PORT=3000
@@ -43,7 +43,7 @@ services:
   # pgAdmin per gestione database
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: events_pgadmin
+    container_name: alive_logs_pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin

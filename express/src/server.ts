@@ -15,7 +15,7 @@ const io = new Server(server);
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'events_db',
+  database: process.env.DB_NAME || 'alive_logs_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'password',
 });
@@ -64,11 +64,11 @@ app.get('/admin/', (req: Request, res: Response) => {
 });
 
 // Endpoint per ottenere gli eventi storici
-app.get('/api/events/:code', async (req: Request, res: Response) => {
+app.get('/api/alive/:code', async (req: Request, res: Response) => {
   try {
     const { code } = req.params;
     const result = await pool.query(
-      'SELECT * FROM events WHERE code = $1 ORDER BY created_at ASC',
+      'SELECT * FROM alive_logs WHERE code = $1 ORDER BY created_at ASC',
       [code]
     );
     res.json(result.rows);
@@ -79,7 +79,7 @@ app.get('/api/events/:code', async (req: Request, res: Response) => {
 });
 
 // Endpoint per creare un nuovo evento
-app.post('/api/events', async (req: Request, res: Response) => {
+app.post('/api/alive', async (req: Request, res: Response) => {
   try {
     const { code, title, description } = req.body;
 
@@ -89,7 +89,7 @@ app.post('/api/events', async (req: Request, res: Response) => {
 
     // Inserisci l'evento nel database - il trigger PostgreSQL invierà la notifica
     const result = await pool.query(
-      'INSERT INTO events (code, title, description) VALUES ($1, $2, $3) RETURNING *',
+      'INSERT INTO alive_logs (code, title, description) VALUES ($1, $2, $3) RETURNING *',
       [code, title, description]
     );
 
@@ -107,7 +107,7 @@ app.post('/api/events', async (req: Request, res: Response) => {
 });
 
 // Endpoint per eliminare un evento
-app.delete('/api/events/:id', async (req: Request, res: Response) => {
+app.delete('/api/alive/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     if (!id || isNaN(parseInt(id))) {
@@ -116,7 +116,7 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
 
     // Prima recupera l'evento per avere i dettagli
     const eventResult = await pool.query(
-      'SELECT * FROM events WHERE id = $1',
+      'SELECT * FROM alive_logs WHERE id = $1',
       [id]
     );
 
@@ -125,7 +125,7 @@ app.delete('/api/events/:id', async (req: Request, res: Response) => {
     }
 
     // Elimina l'evento - il trigger PostgreSQL invierà la notifica
-    await pool.query('DELETE FROM events WHERE id = $1', [id]);
+    await pool.query('DELETE FROM alive_logs WHERE id = $1', [id]);
 
     console.log('Evento eliminato:', eventResult.rows[0]);
 
@@ -174,7 +174,7 @@ io.on('connection', (socket) => {
 
       // Invia gli eventi storici
       const result = await pool.query(
-        'SELECT * FROM events WHERE code = $1 ORDER BY created_at ASC',
+        'SELECT * FROM alive_logs WHERE code = $1 ORDER BY created_at ASC',
         [code]
       );
 
@@ -219,7 +219,7 @@ async function setupDatabaseListener() {
   notificationClient = new Client({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432'),
-    database: process.env.DB_NAME || 'events_db',
+    database: process.env.DB_NAME || 'alive_logs_db',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'password',
   });
@@ -235,7 +235,7 @@ async function setupDatabaseListener() {
           console.log('Notifica PostgreSQL ricevuta:', payload);
 
           // Invia l'evento a tutti i client connessi al codice specifico
-          if (payload.table === 'events') {
+          if (payload.table === 'alive_logs') {
             const event = payload.data;
             const code = payload.code;
             // Gestisce INSERT, UPDATE e DELETE

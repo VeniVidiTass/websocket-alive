@@ -27,7 +27,7 @@ Un sistema completo per la gestione e visualizzazione di eventi in tempo reale, 
 #### Schema del Database
 ```sql
 -- Tabella principale per gli eventi
-CREATE TABLE events (
+CREATE TABLE alive_logs (
     id SERIAL PRIMARY KEY,
     code VARCHAR(255) NOT NULL,        -- Codice identificativo per raggruppare eventi
     title VARCHAR(255) NOT NULL,       -- Titolo dell'evento
@@ -36,7 +36,7 @@ CREATE TABLE events (
 );
 
 -- Indice per migliorare le performance di ricerca per codice
-CREATE INDEX idx_events_code ON events(code);
+CREATE INDEX idx_alive_logs_code ON alive_logs(code);
 ```
 
 #### Sistema LISTEN/NOTIFY
@@ -79,7 +79,7 @@ Il server è organizzato in diverse sezioni funzionali:
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'events_db',
+  database: process.env.DB_NAME || 'alive_logs_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'password',
 });

@@ -14,7 +14,7 @@
     "express",
     "postgresql",
     "real-time",
-    "events"
+    "alive_logs"
   ],
   "author": "",
   "license": "ISC",

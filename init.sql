@@ -1,5 +1,5 @@
 -- Script di inizializzazione del database
-CREATE TABLE IF NOT EXISTS events (
+CREATE TABLE IF NOT EXISTS alive_logs (
     id SERIAL PRIMARY KEY,
     code VARCHAR(255) NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 -- Crea un indice sul campo code per migliorare le performance
-CREATE INDEX IF NOT EXISTS idx_events_code ON events(code);
+CREATE INDEX IF NOT EXISTS idx_alive_logs_code ON alive_logs(code);
 
 -- Funzione per notificare i cambiamenti di dati
 CREATE OR REPLACE FUNCTION notify_data_change() 
@@ -42,14 +42,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Applica il trigger alla tabella events per tutte le operazioni
-DROP TRIGGER IF EXISTS events_notify_trigger ON events;
-CREATE TRIGGER events_notify_trigger
-    AFTER INSERT OR UPDATE OR DELETE ON events
+-- Applica il trigger alla tabella alive_logs per tutte le operazioni
+DROP TRIGGER IF EXISTS alive_logs_notify_trigger ON alive_logs;
+CREATE TRIGGER alive_logs_notify_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON alive_logs
     FOR EACH ROW EXECUTE PROCEDURE notify_data_change();
 
 -- Inserisci alcuni dati di esempio
-INSERT INTO events (code, title, description) VALUES 
+INSERT INTO alive_logs (code, title, description) VALUES 
 ('DEMO', 'Evento di benvenuto', 'Questo è un evento di esempio per testare il sistema'),
 ('DEMO', 'Sistema operativo', 'Il sistema è ora completamente operativo e pronto per l''uso'),
 ('TEST', 'Test di connessione', 'Test della connessione al database'),
