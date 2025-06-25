@@ -1,30 +1,29 @@
 services:
-  # Alive Logs Microservice
-  alive-service:
+
+  alive-webapp:
     build:
-      context: ./gestmed-webapp/backend
+      context: ./websocket-alive/express
       dockerfile: Dockerfile
-    container_name: alive-service
-    ports:
-      - "3004:3004"
+    container_name: alive-webapp
     environment:
-      - NODE_ENV=development
-      - SERVICE=alive
-      - PORT=3004
+      - NODE_ENV=production
+      - MODE=server
       - DB_HOST=alive-db
       - DB_PORT=5432
       - DB_NAME=gestmed_alive_db
       - DB_USER=gestmed_user
       - DB_PASSWORD=gestmed_password
-      - APPOINTMENTS_SERVICE_URL=http://appointments-service:3003    
+      - PORT=3000
+    ports:
+      - "3005:3000"
     depends_on:
       alive-db:
         condition: service_healthy
     networks:
       - gestmed-network
-    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3  # Frontend
+      retries: 3
+      start_period: 40s
